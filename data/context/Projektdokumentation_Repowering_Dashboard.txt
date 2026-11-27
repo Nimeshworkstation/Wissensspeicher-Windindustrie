@@ -1,0 +1,194 @@
+PROJEKTDOKUMENTATION: REPOWERING-DASHBOARD WINDENERGIE AN LAND
+Stand der Dokumentation: 27.11.2026
+
+Dieses Dokument beschreibt, wie das Repowering-Dashboard arbeitet: Datenquelle,
+Datenstand, Berechnungslogik, Filter und bekannte Datenlücken. Es enthält bewusst
+keine aktuellen Anlagenzahlen. Alle Zahlen im Dashboard werden zur Laufzeit per
+SQL aus der Datenbank berechnet.
+
+
+1. WOZU DIENT DAS DASHBOARD?
+
+Das Dashboard beantwortet die Leitfrage: Wo liegt das Repowering-Potenzial in
+Norddeutschland (Schleswig-Holstein, Hamburg, Bremen, Niedersachsen,
+Mecklenburg-Vorpommern)? Welche Windenergieanlagen an Land sind zum Stichtag
+31.12.2026 älter als 20 Jahre, von welchen Herstellern und mit welcher Leistung?
+
+Anlagen, die älter als 20 Jahre sind, gelten als Repowering-Kandidaten, weil
+ihre EEG-Förderung in der Regel ausgelaufen ist oder bald ausläuft. Für diese
+Anlagen stellt sich die Frage: Weiterbetrieb, Repowering (Ersatz durch neue,
+leistungsstärkere Anlagen) oder Rückbau.
+
+
+2. WOHER KOMMEN DIE DATEN?
+
+Quelle ist das Marktstammdatenregister (MaStR) der Bundesnetzagentur, genauer der
+Gesamtdatenexport, der täglich als XML-Datei veröffentlicht wird. Die Daten stehen
+unter der Datenlizenz Deutschland – Namensnennung – Version 2.0 (DL-DE-BY 2.0).
+
+Der Download erfolgt mit dem Python-Paket open-mastr. Es lädt die Windeinheiten
+(Tabelle EinheitenWind) und die EEG-Anlagendaten (Tabelle AnlagenEegWind),
+wandelt Codes in lesbare Werte um (zum Beispiel Bundesland-Nummern in Namen)
+und speichert alles in einer lokalen SQLite-Datenbank.
+
+Anschließend übernimmt der Importschritt die Daten in die Datenbank des
+Dashboards. Übernommen werden alle Windeinheiten, sowohl "Windenergie an Land"
+als auch "Windenergie auf See" (Offshore). Die Leitfrage und die Seite
+"Spezielle Abfragen" betrachten ausschließlich Windenergie an Land. Offshore-
+Anlagen sind nur im Dashboard über den Filter "Wind an Land oder auf See"
+zum Vergleich auswählbar.
+
+
+3. WIE AKTUELL SIND DIE DATEN?
+
+Der Datenstand ist das Datum des MaStR-Downloads, der zuletzt importiert wurde.
+Er wird im Dashboard in der Fußzeile als "Datenstand des Imports" angezeigt und
+auf der Seite "Spezielle Abfragen" unter jeder Antwort.
+
+Ein automatischer Auftrag lädt die MaStR-Daten täglich um 03:00 Uhr
+(Zeitzone Europe/Berlin) neu und importiert sie. Der Auftrag läuft nur, wenn
+der Hintergrunddienst (Celery mit Redis) gestartet ist. Ohne ihn bleibt der
+zuletzt importierte Datenstand bestehen.
+
+Wichtig: Das MaStR wird von den Anlagenbetreibern selbst gepflegt. Änderungen
+erscheinen erst, wenn der Betreiber sie meldet. Der Datenstand des Exports ist
+daher nicht automatisch der tatsächliche Stand vor Ort.
+
+
+4. WIE WIRD DAS ALTER EINER ANLAGE BERECHNET?
+
+Eine Anlage gilt als älter als 20 Jahre, wenn ihr Inbetriebnahmedatum spätestens
+20 Jahre vor dem Stichtag liegt. Beispiel: Stichtag 31.12.2026 bedeutet
+Inbetriebnahme am oder vor dem 31.12.2006. Eine Anlage mit Inbetriebnahme am
+31.12.2006 zählt mit, eine Anlage mit Inbetriebnahme am 01.01.2007 nicht.
+
+Grundlage ist das Inbetriebnahmedatum der Einheit im MaStR. Für das Ende der
+EEG-Förderung ist dagegen das EEG-Inbetriebnahmedatum maßgeblich. Die Förderung
+läuft 20 Jahre zuzüglich des Inbetriebnahmejahres, also bis zum 31.12. des
+20. Jahres nach dem Inbetriebnahmejahr. Das EEG-Inbetriebnahmedatum kann vom
+Inbetriebnahmedatum der Einheit abweichen. Diese Abweichung ist im Dashboard
+noch nicht berücksichtigt.
+
+Anlagen ohne Inbetriebnahmedatum können nicht bewertet werden und sind in der
+Altersauswertung nicht enthalten. Das betrifft im Wesentlichen geplante Anlagen.
+Das Dashboard weist ihre Anzahl in einem Hinweis aus.
+
+
+5. WAS BEDEUTEN DIE FILTER IM DASHBOARD?
+
+Zeitraum – "Bis":
+"Bis" ist der Stichtag, zu dem das Alter berechnet wird. Voreingestellt ist der
+31.12.2026, der Stichtag der Leitfrage. Wählbar ist ein Datum bis zum
+31.12.2026; liegt das heutige Datum später, bis zum heutigen Datum.
+
+Zeitraum – "Inbetriebnahme bis spätestens" (im Formular auch "Von" genannt):
+Das ist das späteste Inbetriebnahmedatum, das noch mitgezählt wird. Voreingestellt
+ist der Stichtag minus 20 Jahre. Es darf höchstens 20 Jahre vor "Bis" liegen und
+nicht vor dem frühesten Inbetriebnahmedatum in der Datenbank. Ein früheres Datum
+zeigt nur noch ältere Anlagen, zum Beispiel alle Anlagen, die älter als 25 Jahre
+sind.
+
+Bundesländer:
+Voreingestellt sind die fünf norddeutschen Bundesländer. Mit "Norddeutschland
+zurücksetzen" wird diese Auswahl wiederhergestellt. Andere Bundesländer können
+zusätzlich ausgewählt werden.
+
+Betriebsstatus:
+Voreingestellt ist "In Betrieb". Weitere Status sind "In Planung",
+"Vorübergehend stillgelegt" und "Endgültig stillgelegt". Für Repowering sind
+in der Regel Anlagen in Betrieb relevant.
+
+Wind an Land oder auf See:
+Voreingestellt ist "Windenergie an Land". Mit "Windenergie auf See" werden
+zusätzlich Offshore-Anlagen ausgewertet. Bei der Altersgrenze von 20 Jahren
+erscheinen dort keine Anlagen, weil die älteste Offshore-Anlage, die laut MaStR
+noch in Betrieb ist, erst 2009 in Betrieb genommen wurde. Außerdem liegen die meisten Offshore-Anlagen in der
+Ausschließlichen Wirtschaftszone (AWZ) und sind keinem Bundesland zugeordnet.
+Sie werden deshalb von der Bundesländerauswahl nicht erfasst.
+
+Jeder Filter wird mit der Schaltfläche "Anwenden" übernommen.
+
+
+6. WAS ZEIGEN DIE BEREICHE DES DASHBOARDS?
+
+Kennzahlen: Anzahl der Anlagen, die Altersgrenze und Filter erfüllen, ihre
+Bruttoleistung in Megawatt (MW) und die Anzahl der Anlagen mit gültigen
+Koordinaten.
+
+Anlagen nach Windtyp und Anlagen nach Betriebsstatus: Anzahl und Bruttoleistung,
+aufgeteilt nach Windtyp und Status. Ist "Windenergie auf See" ausgewählt und
+erfüllt keine Offshore-Anlage die Filter, erklärt ein Hinweis auf der Karte den
+Grund (älteste Offshore-Anlage in Betrieb, Anteil in der AWZ).
+
+Standorte der Anlagen: Karte mit einem Punkt je Anlage. Anlagen ohne gültige
+Koordinaten fehlen auf der Karte, werden in den Summen aber mitgezählt. Die Karte
+benötigt einen Kartenschlüssel (CARTO) in der Konfiguration.
+
+Anzahl nach Hersteller und Leistung nach Hersteller: Diagramme der 15 größten
+Hersteller, die übrigen Hersteller sind zu "Übrige" zusammengefasst. Über die
+Schaltfläche "Tabelle" wird die vollständige Liste angezeigt.
+
+Leistung: Angegeben ist immer die Bruttoleistung laut MaStR. Sie wird in
+Kilowatt gespeichert und in Megawatt angezeigt.
+
+
+7. WAS IST DIE SEITE "SPEZIELLE ABFRAGEN"?
+
+Die Seite beantwortet die Leitfrage und weitere strukturierte Fragen mit festen
+SQL-Abfragen. Der Stichtag ist dort fest auf den 31.12.2026 gesetzt, also
+Inbetriebnahme bis spätestens 31.12.2006. Auswählbar sind die fünf
+norddeutschen Bundesländer.
+
+Unter jeder Antwort stehen Quelle, Datenstand, Lizenz, Stichtag, gewählte
+Bundesländer, Anzahl der zugrunde liegenden Anlagen und die ausgeführte
+SQL-Abfrage. Die vollständigen Ergebnisse lassen sich als CSV herunterladen.
+
+Die Fragen und ihre SQL-Abfragen sind in der Datenbank gespeichert und werden in
+Django-Admin unter "Katalogfragen" gepflegt. Ausgeführt werden nur
+SELECT-Abfragen, und zwar lesend. Eine Abfrage kann die Daten nicht verändern.
+
+Dashboard und "Spezielle Abfragen" verwenden standardmäßig denselben Stichtag,
+den 31.12.2026. Mit den Standardfiltern des Dashboards (Wind an Land, in Betrieb,
+fünf norddeutsche Bundesländer) zeigen beide Seiten dieselben Zahlen.
+
+
+8. BEKANNTE DATENLÜCKEN UND EINSCHRÄNKUNGEN
+
+Herstellernamen sind nicht vereinheitlicht. Derselbe Hersteller kann unter
+mehreren Firmennamen erscheinen, zum Beispiel Nordex als "Nordex Energy GmbH",
+"Nordex Germany GmbH" und "Nordex SE". Anlagen ohne Herstellerangabe erscheinen
+als "Unbekannt", manche Betreiber haben "Sonstige" eingetragen.
+
+Typbezeichnungen sind nicht vereinheitlicht, zum Beispiel "N117", "N117/2400" und
+"Nordex N117" für denselben Anlagentyp.
+
+Nabenhöhe und Koordinaten fehlen bei einem Teil der Anlagen. Fehlende Werte
+werden nicht geschätzt.
+
+Einzelne Einträge sind unplausibel, etwa Koordinaten außerhalb Deutschlands,
+ein Inbetriebnahmedatum im Jahr 1949 oder Nabenhöhen über 200 Metern. Solche
+Werte stammen aus dem MaStR und werden derzeit nicht korrigiert.
+
+Doppelte MaStR-Nummern sind ausgeschlossen. Eine Anlage, die versehentlich unter
+zwei verschiedenen MaStR-Nummern registriert wurde, wird jedoch nicht erkannt.
+
+Der Import ergänzt und aktualisiert Anlagen, löscht aber keine. Verschwindet
+eine Anlage aus einem späteren MaStR-Export, bleibt ihr letzter Stand in der
+Datenbank des Dashboards erhalten.
+
+Die geplanten Verbesserungen sind in der Datei IMPROVEMENTS.txt im Projekt
+beschrieben.
+
+
+9. WIE ARBEITET DER DASHBOARD-ASSISTENT (CHAT)?
+
+Der Assistent beantwortet Fragen ausschließlich auf Grundlage der indexierten
+Dokumente im Ordner data/context. Derzeit ist das nur diese
+Projektdokumentation. Jede Antwort nennt ihre Quelle.
+
+Findet der Assistent keine passende Textstelle, antwortet er, dass ihm der
+Kontext fehlt, statt eine Antwort zu erfinden.
+
+Der Assistent berechnet keine Anlagenzahlen. Zahlen zu Anlagen, Leistung und
+Herstellern stammen immer aus den SQL-Abfragen des Dashboards und der Seite
+"Spezielle Abfragen".

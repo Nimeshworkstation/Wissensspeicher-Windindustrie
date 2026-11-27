@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document Q&amp;A</title>
+  <style>
+    body{font:16px/1.5 system-ui,sans-serif;max-width:760px;margin:48px auto;padding:0 20px;color:#18212b;background:#f5f7fa}
+    h1{margin-bottom:8px}.card{background:white;padding:24px;margin:20px 0;border:1px solid #dce2e9;border-radius:12px}
+    label{display:block;font-weight:600;margin:10px 0}input[type=file],textarea{display:block;width:100%;box-sizing:border-box;margin:10px 0 16px}
+    textarea{min-height:100px;padding:12px;border:1px solid #c7d0da;border-radius:8px;font:inherit}button{background:#175cd3;color:white;border:0;border-radius:7px;padding:10px 16px;font:inherit;cursor:pointer}
+    .answer,.error{white-space:pre-wrap;padding:14px;border-radius:8px}.answer{background:#eef6ff}.error{background:#fff1f0;color:#9f241b}
+    .sources{font-size:.95rem;margin-top:12px}.sources li{margin:4px 0}
+  </style>
+</head>
+<body>
+  <h1>Document Q&amp;A</h1>
+  <p>Ask questions grounded in documents from the automated ingestion pipeline.</p>
+  {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+  {% if result %}
+    <div class="answer" role="status">{{ result.answer }}</div>
+    {% if result.sources %}
+      <section class="sources" aria-label="Sources">
+        <h2>Sources</h2>
+        <ol>
+          {% for source in result.sources %}
+            <li>[{{ source.citation }}] {{ source.title }}{% if source.page %}, p. {{ source.page }}{% endif %}</li>
+          {% endfor %}
+        </ol>
+      </section>
+    {% endif %}
+  {% endif %}
+  <section class="card">
+    <h2>Ask a question</h2>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="ask">
+      <label for="question">Question</label>
+      <textarea id="question" name="question" required>{{ question }}</textarea>
+      <button type="submit">Get answer</button>
+    </form>
+  </section>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<section class="my-5 grid gap-4 md:grid-cols-3" aria-label="Kennzahlen">
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span class="text-sm text-slate-500">Anlagen</span><strong class="my-2 block text-3xl font-bold tracking-tight text-slate-900">{{ results.count }}</strong><small class="text-xs text-slate-500">liegen im ausgew&auml;hlten Datumsbereich und erf&uuml;llen die Filter</small></article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span class="text-sm text-slate-500">Installierte Leistung</span><strong class="my-2 block text-3xl font-bold tracking-tight text-slate-900">{{ results.capacity }} MW</strong><small class="text-xs text-slate-500">Summe der Bruttoleistung in MW</small></article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span class="text-sm text-slate-500">Standorte auf Karte</span><strong class="my-2 block text-3xl font-bold tracking-tight text-slate-900">{{ results.mapped }}</strong><small class="text-xs text-slate-500">Eintr&auml;ge mit g&uuml;ltigen Koordinaten</small></article>
+</section>
+{% if has_missing_commissioning %}
+ <p class="my-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="note">{{ missing_commissioning_count }} Anlagen in den ausgew&auml;hlten Bundesl&auml;ndern haben kein Inbetriebnahmedatum und k&ouml;nnen deshalb keinem Datumsbereich zugeordnet werden.</p>
+{% endif %}
+
+<section class="my-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="mb-4 flex items-center justify-between"><div><span class="text-[11px] font-bold tracking-[0.16em] text-slate-500">&Uuml;BERBLICK</span><h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Standorte der Anlagen</h2></div><span class="flex items-center gap-2 text-xs text-slate-500"><i class="h-2.5 w-2.5 rounded-full bg-orange-500"></i>Turbine</span></div>
+  <iframe class="block h-[390px] w-full rounded-xl border-0 bg-slate-100 max-sm:h-[330px]" src="{{ results.map_url }}" title="Karte mit Windkraftanlagen" loading="lazy"></iframe>
+</section>
+
+<section class="my-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Vergleich nach Windtyp">
+  <div class="mb-4"><span class="text-[11px] font-bold tracking-[0.16em] text-slate-500">VERGLEICH</span><h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Anlagen nach Windtyp</h2><p class="mt-1 text-sm text-slate-500">Die Karten folgen dem ausgew&auml;hlten Datumsbereich, den Bundesl&auml;ndern sowie den Status- und Windtypfiltern.</p></div>
+  <div class="grid grid-cols-2 gap-5">
+    {% for card in comparison_cards %}
+    <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <header class="mb-4 border-b border-slate-100 pb-4">
+        <h3 class="text-lg font-bold text-slate-900">{{ card.label }}</h3>
+        {% if card.note %}
+        <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900" role="note">{{ card.note }}</p>
+        {% elif card.included %}
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div><span class="text-xs text-slate-500">Anlagen gesamt</span><strong class="mt-1 block text-2xl font-bold tabular-nums text-slate-900">{{ card.count }}</strong></div>
+          <div><span class="text-xs text-slate-500">Bruttoleistung gesamt</span><strong class="mt-1 block text-2xl font-bold tabular-nums text-slate-900">{{ card.capacity_display }} MW</strong></div>
+        </div>
+        {% else %}<p class="mt-3 text-sm text-slate-500">Durch den Windtypfilter ausgeschlossen.</p>{% endif %}
+      </header>
+      {% if not card.note %}
+      {% if card.chart %}<div class="mb-4" aria-label="Diagramm: {{ card.label }} nach Betriebsstatus">{{ card.chart|safe }}</div>{% endif %}
+      <h4 class="mb-2 text-sm font-semibold text-slate-700">Nach Betriebsstatus</h4>
+      <div class="overflow-x-auto"><table class="w-full border-collapse text-sm"><thead><tr class="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500"><th class="py-2 font-semibold">Status</th><th class="px-2 py-2 text-right font-semibold">Anlagen</th><th class="py-2 text-right font-semibold">Bruttoleistung (MW)</th></tr></thead>
+        <tbody>{% for item in card.statuses %}<tr class="border-b border-slate-100 last:border-0"><td class="py-2 text-slate-700">{{ item.label }}</td><td class="px-2 py-2 text-right tabular-nums text-slate-600">{% if item.included %}{{ item.count }}{% else %}&mdash;{% endif %}</td><td class="py-2 text-right tabular-nums text-slate-700">{% if item.included %}{{ item.capacity_display }}{% else %}&mdash;{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="stv-section my-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Vergleich nach Betriebsstatus">
+  <style>
+    .stv-section { position:relative; }
+    .stv-radio { position:absolute; opacity:0; pointer-events:none; }
+    .stv-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:.75rem; margin-bottom:1rem; }
+    .stv-toggle { display:inline-flex; padding:3px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:.6rem; }
+    .stv-toggle label { padding:.35rem .9rem; border-radius:.45rem; font-size:.8rem; font-weight:600; color:#475569; cursor:pointer; user-select:none; white-space:nowrap; }
+    .stv-toggle label:hover { color:#065f46; }
+    #stv-cards:checked ~ .stv-head label[for="stv-cards"],
+    #stv-count:checked ~ .stv-head label[for="stv-count"],
+    #stv-mw:checked ~ .stv-head label[for="stv-mw"] { background:#047857; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.15); }
+    #stv-cards:focus-visible ~ .stv-head label[for="stv-cards"],
+    #stv-count:focus-visible ~ .stv-head label[for="stv-count"],
+    #stv-mw:focus-visible ~ .stv-head label[for="stv-mw"] { outline:2px solid #10b981; outline-offset:2px; }
+    /* Inactive panels keep their width (height 0 instead of display:none),
+       so Plotly draws the hidden charts at the correct size. */
+    .stv-panel { height:0; overflow:hidden; visibility:hidden; }
+    #stv-cards:checked ~ .stv-cards-panel,
+    #stv-count:checked ~ .stv-count-panel,
+    #stv-mw:checked ~ .stv-mw-panel { height:auto; overflow:visible; visibility:visible; }
+    .stv-note { margin:.5rem 0 0; font-size:12px; color:#64748b; }
+  </style>
+  <input type="radio" name="stv-view" id="stv-cards" class="stv-radio" checked>
+  <input type="radio" name="stv-view" id="stv-count" class="stv-radio">
+  <input type="radio" name="stv-view" id="stv-mw" class="stv-radio">
+  <div class="stv-head">
+    <div><span class="text-[11px] font-bold tracking-[0.16em] text-slate-500">STATUSVERGLEICH</span><h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Anlagen nach Betriebsstatus</h2><p class="mt-1 text-sm text-slate-500">Alle Status werden verglichen; Datumsbereich, Bundesl&auml;nder und Windtyp folgen den ausgew&auml;hlten Filtern.</p></div>
+    <div class="stv-toggle" role="group" aria-label="Ansicht w&auml;hlen">
+      <label for="stv-cards">Karten</label>
+      <label for="stv-count">Diagramm: Anlagen</label>
+      <label for="stv-mw">Diagramm: Leistung</label>
+    </div>
+  </div>
+  <div class="stv-panel stv-cards-panel">
+  <div class="grid grid-cols-2 gap-5 lg:grid-cols-4">
+    {% for card in status_cards %}
+    <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <header class="mb-4 border-b border-slate-100 pb-4">
+        <h3 class="text-lg font-bold text-slate-900">{{ card.label }}</h3>
+        <div class="mt-3 grid gap-2">
+          <div><span class="text-xs text-slate-500">Anlagen</span><strong class="mt-1 block text-2xl font-bold tabular-nums text-slate-900">{{ card.count }}</strong></div>
+          <div><span class="text-xs text-slate-500">Bruttoleistung</span><strong class="mt-1 block text-xl font-bold tabular-nums text-slate-900">{{ card.capacity_display }} MW</strong></div>
+        </div>
+      </header>
+      <h4 class="mb-2 text-sm font-semibold text-slate-700">Nach Windtyp</h4>
+      <div class="space-y-2 text-sm">
+        {% for item in card.wind_types %}
+        <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2 last:border-0"><span class="text-slate-600">{{ item.label }}</span>{% if item.included %}<span class="text-right font-medium tabular-nums text-slate-800">{{ item.count }}<br>{{ item.capacity_display }} MW</span>{% else %}<span class="text-right text-slate-400">&mdash;</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  </div>
+  <div class="stv-panel stv-count-panel" aria-label="Diagramm: Anlagen nach Betriebsstatus und Windtyp">
+    {% if status_charts.count %}{{ status_charts.count|safe }}{% else %}<p class="text-sm text-slate-500">Keine Daten f&uuml;r diese Auswahl.</p>{% endif %}
+    <p class="stv-note">Geplante Anlagen haben noch kein Inbetriebnahmedatum und fallen daher aus dem Datumsfilter.</p>
+  </div>
+  <div class="stv-panel stv-mw-panel" aria-label="Diagramm: Bruttoleistung nach Betriebsstatus und Windtyp">
+    {% if status_charts.capacity %}{{ status_charts.capacity|safe }}{% else %}<p class="text-sm text-slate-500">Keine Daten f&uuml;r diese Auswahl.</p>{% endif %}
+    <p class="stv-note">Geplante Anlagen haben noch kein Inbetriebnahmedatum und fallen daher aus dem Datumsfilter.</p>
+  </div>
+</section>
+
+<section class="my-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Inbetriebnahmen nach Jahr">
+  <div class="mb-4"><span class="text-[11px] font-bold tracking-[0.16em] text-slate-500">ENTWICKLUNG</span><h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Inbetriebnahmen nach Jahr</h2><p class="mt-1 text-sm text-slate-500">Anzahl der Anlagen je Jahr der Inbetriebnahme im gew&auml;hlten Datumsbereich; Bundesl&auml;nder, Status und Windtyp folgen den ausgew&auml;hlten Filtern.</p></div>
+  {% if commissioning_chart %}<div aria-label="Liniendiagramm: Inbetriebnahmen nach Jahr">{{ commissioning_chart|safe }}</div>
+  {% else %}<p class="text-sm text-slate-500">Keine Anlagen f&uuml;r diese Auswahl.</p>{% endif %}
+</section>
+
+<style>
+  .mfr-grid { display:grid; grid-template-columns:1fr; gap:1.25rem; margin:1.25rem 0; }
+  @media (min-width:1024px) { .mfr-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  .mfr-card { position:relative; min-width:0; padding:1.25rem; background:#fff; border:1px solid #e2e8f0; border-radius:1rem; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  .mfr-radio { position:absolute; opacity:0; pointer-events:none; }
+  .mfr-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:.75rem; margin-bottom:1rem; }
+  .mfr-kicker { font-size:11px; font-weight:700; letter-spacing:.16em; color:#64748b; }
+  .mfr-title { margin:.25rem 0 0; font-size:1.25rem; font-weight:700; letter-spacing:-.01em; color:#0f172a; }
+  .mfr-toggle { display:inline-flex; padding:3px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:.6rem; }
+  .mfr-toggle label { padding:.35rem .9rem; border-radius:.45rem; font-size:.8rem; font-weight:600; color:#475569; cursor:pointer; user-select:none; }
+  .mfr-toggle label:hover { color:#065f46; }
+  .mfr-radio-chart:checked ~ .mfr-head .mfr-label-chart,
+  .mfr-radio-table:checked ~ .mfr-head .mfr-label-table { background:#047857; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .mfr-radio-chart:focus-visible ~ .mfr-head .mfr-label-chart,
+  .mfr-radio-table:focus-visible ~ .mfr-head .mfr-label-table { outline:2px solid #10b981; outline-offset:2px; }
+  .mfr-panel { display:none; }
+  .mfr-radio-chart:checked ~ .mfr-chart, .mfr-radio-table:checked ~ .mfr-table { display:block; }
+  .mfr-unit { margin:.5rem 0 0; text-align:right; font-size:11px; color:#64748b; }
+  .mfr-tablewrap { overflow-x:auto; border-top:1px solid #f1f5f9; }
+  .mfr-tablewrap table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  .mfr-tablewrap th { padding:.75rem .625rem; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
+  .mfr-tablewrap td { padding:.65rem .625rem; border-top:1px solid #f1f5f9; color:#334155; }
+  .mfr-tablewrap .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .mfr-empty { font-size:.875rem; color:#64748b; }
+</style>
+<div class="mfr-grid">
+  {% include "windenergy/partials/manufacturer_card.html" with card_id="count" kicker="ANLAGEN" title="Anzahl nach Hersteller" chart=results.chart_count items=results.manufacturers_by_count %}
+  {% include "windenergy/partials/manufacturer_card.html" with card_id="capacity" kicker="LEISTUNG" title="Leistung nach Hersteller" chart=results.chart_capacity items=results.manufacturers %}
+</div>

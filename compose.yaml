@@ -1,0 +1,79 @@
+# Everything runs in Docker:
+#   docker compose up -d --build      start (first build takes a few minutes)
+#   http://localhost:8000             dashboard
+#   docker compose down               stop (data stays in the volumes)
+#
+# One-off commands, e.g. the first MaStR download and import:
+#   docker compose run --rm web python manage.py download_mastr_wind
+#   docker compose run --rm web python manage.py import_wind_data
+
+x-app: &app
+  image: windenergy-app             # built once by the "migrate" service below
+  pull_policy: never               # local image, never pulled from a registry
+  env_file:
+    - path: .env
+      required: false          # CARTO_BASEMAP_API_KEY, API_KEY (Groq), ...
+  environment:
+    SQLITE_PATH: /app/db/django.sqlite3
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+  volumes:
+    - db:/app/db                              # application database (SQLite)
+    - mastr-data:/app/data/data               # MaStR downloads + open-mastr database
+    - ./data/context:/app/data/context        # RAG documents: edit on the host, no rebuild
+    - logs:/app/logs
+    - vectorstore:/app/ragapp/store           # Chroma vector store
+    - open-mastr-home:/app/.open_mastr        # open-mastr config and logs
+    - model-cache:/root/.cache/huggingface    # embedding model, downloaded once
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"                 # only from this computer (used by a local, non-Docker worker)
+
+  migrate:                                    # creates/updates tables, then exits
+    <<: *app
+    build: .                                  # the only service that builds the image
+    command: python manage.py migrate --noinput
+    restart: "no"
+
+  web:
+    <<: *app
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "127.0.0.1:8000:8000"                 # only reachable from this computer
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:                                     # runs the download + import task
+    <<: *app
+    command: celery -A repowering worker -l INFO --concurrency=2   # one task per day: 2 processes are enough
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+  beat:                                       # schedules the daily 03:00 refresh
+    <<: *app
+    command: celery -A repowering beat -l INFO
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db:
+  mastr-data:
+  logs:
+  vectorstore:
+  open-mastr-home:
+  model-cache:

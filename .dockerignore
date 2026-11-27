@@ -1,0 +1,17 @@
+# Local environment and secrets (secrets come from .env via compose, never baked into the image)
+.venv/
+.env
+.git/
+__pycache__/
+*.pyc
+
+# Runtime data: lives in Docker volumes instead of the image
+django.sqlite3*
+data/data/
+logs/
+ragapp/store/
+.open_mastr/
+celerybeat-schedule*
+
+# Not needed in the image
+theme/static_src/node_modules/

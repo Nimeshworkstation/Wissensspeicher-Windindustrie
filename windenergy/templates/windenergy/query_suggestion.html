@@ -1,0 +1,41 @@
+{% extends "windenergy/base.html" %}
+
+{% block title %}Abfrage vorschlagen{% endblock %}
+
+{% block head %}
+<style>
+  body.site { font-size: 15px; line-height: 1.5; }
+  .suggest-card { max-width: 760px; background: #fff; border: 1px solid var(--site-line); border-radius: 14px; padding: 22px; box-shadow: 0 1px 3px #0f172a0d; }
+  .suggest-card label { display: block; margin: 18px 0 6px; font-weight: 650; }
+  .suggest-card label:first-of-type { margin-top: 0; }
+  .suggest-card input, .suggest-card textarea { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+  .suggest-card textarea { resize: vertical; }
+  .suggest-card button { margin-top: 18px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--site-green); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+  .suggest-card button:hover { background: var(--site-green-dark); }
+  .suggest-hint { margin: 6px 0 0; font-size: 14px; color: var(--site-muted); }
+  .notice { margin: 0 0 14px; padding: 12px 14px; border-radius: 9px; background: var(--site-green-light); color: var(--site-green-dark); }
+  .field-error { color: #991b1b; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block kicker %}Marktstammdatenregister · Fragenkatalog{% endblock %}
+{% block heading %}Abfrage vorschlagen{% endblock %}
+{% block subtitle %}<p class="page-subtitle">Beschreiben Sie die Frage, die Sie mit den MaStR-Daten beantworten möchten. Ein Entwickler prüft den Vorschlag und ergänzt bei Bedarf eine geprüfte SQL-Abfrage im Fragenkatalog.</p>{% endblock %}
+
+{% block content %}
+<section class="suggest-card" aria-label="Abfragevorschlag einreichen">
+  {% for message in messages %}<p class="notice" role="status">{{ message }}</p>{% endfor %}
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_question">{{ form.question.label }}</label>
+    {{ form.question }}
+    {% for error in form.question.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+    <p class="suggest-hint">Beschreiben Sie das gewünschte Ergebnis in eigenen Worten. SQL-Code ist nicht erforderlich.</p>
+
+    <label for="id_details">{{ form.details.label }} (optional)</label>
+    {{ form.details }}
+    {% for error in form.details.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+    <button type="submit">Vorschlag senden</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>North German wind repowering screen</title>
+  <style>
+    body{font:15px/1.5 system-ui,sans-serif;max-width:1180px;margin:30px auto;padding:0 18px;color:#18212b;background:#f5f7fa}
+    h1,h2{line-height:1.2}.card{background:white;padding:20px;margin:18px 0;border:1px solid #dce2e9;border-radius:10px}
+    fieldset{border:0;padding:0;margin:12px 0}label{margin-right:14px;display:inline-block}button{background:#175cd3;color:white;border:0;border-radius:7px;padding:9px 14px;font:inherit;cursor:pointer}
+    .error,.note{padding:12px;border-radius:7px}.error{background:#fff1f0;color:#9f241b}.note{background:#fff8e6}
+    .scroll{overflow:auto}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{padding:7px;border-bottom:1px solid #e5e9ee;text-align:left;vertical-align:top}th{background:#f3f6f9;position:sticky;top:0}
+    .chart-row{display:grid;grid-template-columns:180px 1fr 55px;gap:10px;align-items:center;margin:8px 0}.bar{height:18px;background:#2f7d69;border-radius:3px;min-width:2px}
+    svg{width:100%;height:auto;border:1px solid #dce2e9;border-radius:8px}.sql{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f8;padding:12px;border-radius:7px;font:12px/1.5 ui-monospace,monospace}
+    .muted{color:#536273;font-size:.92rem}
+  </style>
+</head>
+<body>
+  <h1>North German onshore wind: age and EEG support screen</h1>
+  <p>Deterministic SQL result from a dated MaStR export. EEG dates are rule-based estimates and marked unverified where MaStR cannot establish individual payment details.</p>
+  {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+  <section class="card">
+    <h2>Filters</h2>
+    <form method="get">
+      <fieldset><legend>States</legend>
+        {% for code,label in states %}<label><input type="checkbox" name="state" value="{{ code }}" {% if code in selected_states %}checked{% endif %}> {{ label }}</label>{% endfor %}
+      </fieldset>
+      <fieldset><legend>Operating status at export date</legend>
+        {% for status in supported_statuses %}<label><input type="checkbox" name="status" value="{{ status }}" {% if status in selected_statuses %}checked{% endif %}> {{ status }}</label>{% endfor %}
+      </fieldset>
+      <button type="submit">Apply filters</button>
+    </form>
+  </section>
+
+  {% if answer %}
+    <section class="card">
+      <h2>Answer metadata</h2>
+      <dl>
+        <dt>MaStR export date</dt><dd>{{ answer.export_date }}</dd>
+        <dt>SHA-256</dt><dd><code>{{ answer.source_hash }}</code></dd>
+        <dt>Source</dt><dd><a href="{{ answer.source }}">MaStR full export</a></dd>
+        <dt>Licence</dt><dd>{{ answer.licence }}</dd>
+        <dt>Rows returned</dt><dd>{{ answer.row_count }} turbines; {{ answer.sites|length }} site groups</dd>
+        <dt>Spatial check</dt><dd>{{ answer.spatial_check }}</dd>
+      </dl>
+      <p class="note">EEG rule: EEG 2023 § 25(1). The displayed date is conditional on the selected rule basis; the MaStR record does not establish each turbine’s payment category or actual payment start. [unverified]</p>
+      <p>Filters: onshore only; states {{ answer.filters.states|join:", " }}; statuses {{ answer.filters.statuses|join:", " }}; age cutoff {{ answer.filters.cutoff_date }}; strict age SQL threshold {{ answer.filters.age_rule }}.</p>
+    </section>
+
+    <section class="card"><h2>Map</h2>
+      {% if map_svg %}{{ map_svg|safe }}{% else %}<p class="note">[unverified] Load BKG VG250 state boundaries as EPSG:4326 GeoJSON to display the map.</p>{% endif %}
+    </section>
+
+    <section class="card"><h2>Count by registered state</h2>
+      {% if chart %}{% for state,count in chart %}<div class="chart-row"><span>{{ state }}</span><div class="bar" style="width:{% widthratio count answer.row_count 100 %}%"></div><strong>{{ count }}</strong></div>{% empty %}<p>No matching turbines.</p>{% endfor %}{% else %}<p>No matching turbines.</p>{% endif %}
+    </section>
+
+    <section class="card"><h2>Per site</h2><div class="scroll"><table><thead><tr><th>Site reference</th><th>States / districts / municipalities</th><th>Historic manufacturer → current legal successor</th><th>Turbines</th><th>Gross capacity (kW)</th></tr></thead><tbody>
+      {% for site in answer.sites %}<tr><td>{{ site.site_reference }}</td><td>{{ site.states|join:", " }}<br>{{ site.districts|join:", " }}<br>{{ site.municipalities|join:", " }}</td><td>{% for maker in site.manufacturer_breakdown %}{{ maker.historic_manufacturer }} → {{ maker.current_legal_successor }} ({{ maker.turbine_count }}){% if not forloop.last %}<br>{% endif %}{% endfor %}</td><td>{{ site.turbine_count }}</td><td>{{ site.gross_capacity_kw|floatformat:2 }}</td>{% empty %}<tr><td colspan="5">No matching sites.</td></tr>{% endfor %}
+    </tbody></table></div></section>
+
+    <section class="card"><h2>Per turbine</h2><div class="scroll"><table><thead><tr><th>MaStR unit</th><th>Site</th><th>Historic manufacturer (original value)</th><th>Current legal successor</th><th>Review</th><th>Commissioned</th><th>EEG end estimate</th><th>Gross kW</th><th>Status</th><th>District</th><th>Municipality</th><th>Point check</th></tr></thead><tbody>
+      {% for unit in answer.turbines %}<tr>
+        <td>{{ unit.unit_mastr_number|default:"[unverified]" }}</td><td>{{ unit.site_name|default:unit.eeg_mastr_number|default:"[unverified]" }}</td>
+        <td>{{ unit.historic_manufacturer|default:unit.manufacturer_original_value|default:"[unverified]" }}{% if unit.manufacturer_original_value %}<br><small>raw: {{ unit.manufacturer_original_value }}</small>{% endif %}</td>
+        <td>{{ unit.current_legal_successor }}</td><td>{{ unit.manufacturer_review_status }}</td>
+        <td>{{ unit.commissioning_date }}</td><td>{{ unit.eeg_support_end_date_estimate|default:"[unverified]" }} [unverified]</td>
+        <td>{{ unit.gross_capacity_kw|default:"[unverified]" }}</td><td>{{ unit.operating_status }}</td>
+        <td>{{ unit.district|default:"[unverified]" }}</td><td>{{ unit.municipality|default:"[unverified]" }}</td><td>{{ unit.point_match_status }}</td>
+      </tr>{% empty %}<tr><td colspan="12">No matching turbines.</td></tr>{% endfor %}
+    </tbody></table></div></section>
+
+    <section class="card"><h2>SQL used</h2><pre class="sql">{{ answer.sql }}
+
+Parameters: {{ answer.sql_parameters }}</pre><p class="muted">Query run {{ answer.query_run_id }}. Exclusions are recorded in the database quality table with a reason.</p></section>
+  {% endif %}
+</body>
+</html>

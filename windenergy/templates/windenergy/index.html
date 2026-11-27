@@ -1,0 +1,113 @@
+{% extends "windenergy/base.html" %}
+{% load tailwind_tags %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block head %}
+  {% tailwind_css %}
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.11/dist/htmx.min.js" integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg" crossorigin="anonymous" defer></script>
+  {{ plotly_script|safe }}
+{% endblock %}
+
+{% block kicker %}Marktstammdatenregister · Windenergie{% endblock %}
+{% block heading %}Repowering-Potenzial Deutschland{% endblock %}
+{% block subtitle %}<p class="page-subtitle">Alle Windenergieanlagen aus dem Marktstammdatenregister frei auswerten: Zeitraum der Inbetriebnahme, Bundesländer, Betriebsstatus und Onshore/Offshore.</p>{% endblock %}
+
+{% block content %}
+<form action="{% url 'dashboard' %}" method="get" class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" aria-label="Filter">
+  <input type="hidden" name="filters_present" value="1">
+  <section class="flex flex-col gap-5 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="date-filter-title">
+    <h2 id="date-filter-title" class="-mx-4 -mt-4 mb-0 bg-emerald-800 px-4 py-3 text-sm font-semibold text-white">Zeitraum</h2>
+    <div class="flex flex-col gap-4">
+      <label class="grid gap-1.5 text-sm font-semibold text-slate-700" for="commissioned-from">Von
+        <input id="commissioned-from" name="von" class="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-700 shadow-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" type="date" value="{{ von_iso }}" required>
+      </label>
+      <label class="grid gap-1.5 text-sm font-semibold text-slate-700" for="commissioned-to">Bis
+        <input id="commissioned-to" name="bis" class="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-700 shadow-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" type="date" value="{{ bis_iso }}" required>
+      </label>
+    </div>
+    <button type="submit" class="mt-auto self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">Anwenden</button>
+  </section>
+  <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="state-filter-title">
+    <h2 id="state-filter-title" class="-mx-4 -mt-4 mb-4 flex items-center justify-between bg-emerald-800 px-4 py-3 text-sm font-semibold text-white"><span>Bundesl&auml;nder</span></h2>
+    <div class="grid grid-cols-3 gap-x-3 gap-y-1">
+      {% for state in states %}
+      <label class="flex min-w-0 cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-emerald-50">
+        <input class="h-4 w-4 shrink-0 accent-emerald-700" type="checkbox" name="state" value="{{ state }}" {% if state in selected_states %}checked{% endif %}>
+        <span class="min-w-0 break-words">{{ state }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="mt-5 ml-auto block rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">Anwenden</button>
+  </section>
+  <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="status-filter-title">
+    <h2 id="status-filter-title" class="-mx-4 -mt-4 mb-4 bg-emerald-800 px-4 py-3 text-sm font-semibold text-white">Betriebsstatus</h2>
+    <input type="hidden" name="status_filter_present" value="1">
+    <div class="grid gap-x-3 gap-y-1 sm:grid-cols-2">
+      {% for value,label in statuses %}
+      <label class="flex min-w-0 cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-emerald-50">
+        <input class="h-4 w-4 shrink-0 accent-emerald-700" type="checkbox" name="status" value="{{ value }}" {% if value in selected_statuses %}checked{% endif %}>
+        <span class="min-w-0 break-words">{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="mt-5 ml-auto block rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">Anwenden</button>
+  </section>
+  <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="wind-type-filter-title">
+    <h2 id="wind-type-filter-title" class="-mx-4 -mt-4 mb-4 bg-emerald-800 px-4 py-3 text-sm font-semibold text-white">Onshore oder Offshore</h2>
+    <input type="hidden" name="wind_type_filter_present" value="1">
+    <div class="grid gap-x-3 gap-y-1 sm:grid-cols-2">
+      {% for value,label in wind_types %}
+      <label class="flex min-w-0 cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-emerald-50">
+        <input class="h-4 w-4 shrink-0 accent-emerald-700" type="checkbox" name="wind_type" value="{{ value }}" {% if value in selected_wind_types %}checked{% endif %}>
+        <span class="min-w-0 break-words">{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="mt-5 ml-auto block rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">Anwenden</button>
+  </section>
+</form>
+
+{% if validation_error %}
+<p class="my-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ validation_error }}</p>
+{% elif results_error %}
+<p class="my-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ results_error }}</p>
+{% else %}
+{% include "windenergy/partials/dashboard_results.html" %}
+{% endif %}
+
+{% endblock %}
+
+{% block footer %}Quelle: Bundesnetzagentur, Marktstammdatenregister (MaStR), Gesamtdatenexport · Datenlizenz Deutschland – Namensnennung – Version 2.0 (DL-DE-BY 2.0)<br>Auswertung: Inbetriebnahme vom {{ von_label }} bis {{ bis_label }} · Datenstand des Imports: <strong>{{ data_stand_date }}</strong>{% endblock %}
+
+{% block body_end %}
+<details class="group fixed bottom-5 right-5 z-40 w-[min(22rem,calc(100vw-2.5rem))]">
+  <summary aria-controls="chat-panel" class="ml-auto flex h-14 w-14 cursor-pointer list-none items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-200 [&::-webkit-details-marker]:hidden group-open:absolute group-open:right-3 group-open:top-3 group-open:z-10 group-open:h-8 group-open:w-8 group-open:rounded-lg group-open:bg-emerald-700 group-open:shadow-none group-open:focus:ring-2">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-7 w-7 group-open:hidden" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 9h10M7 13h6m-1 8-4-4H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5l-4 4Z"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden h-7 w-7 group-open:block" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/></svg>
+    <span class="sr-only group-open:hidden">Chatbot &ouml;ffnen</span>
+    <span class="sr-only hidden group-open:block">Chatbot schlie&szlig;en</span>
+  </summary>
+  <section role="dialog" aria-label="Dashboard-Chatbot" aria-modal="false" class="mb-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <header class="flex items-center justify-between bg-emerald-800 px-4 py-3 text-white">
+       <div><h2 class="text-sm font-semibold">Dashboard-Assistent</h2><p class="text-xs text-emerald-100">Antworten aus indexierten Dokumenten</p></div>
+    </header>
+    <div id="chat-messages" aria-live="polite" class="flex h-72 flex-col gap-3 overflow-y-auto bg-slate-50 p-4">
+      <p class="max-w-[90%] self-start rounded-xl rounded-tl-sm bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">Hallo! Ich helfe dir bei Fragen zu Von/Bis, Datenstand, Karte und Auswertung.</p>
+      <div class="flex flex-wrap gap-2">
+        {% for question in chat_questions %}
+        <form method="post" action="{% url 'chat' %}" hx-post="{% url 'chat' %}" hx-target="#chat-messages" hx-swap="beforeend" class="contents">
+          {% csrf_token %}
+          <button type="submit" name="message" value="{{ question }}" class="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-left text-xs text-emerald-800 hover:bg-emerald-50">{{ question }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+    <form method="post" action="{% url 'chat' %}" hx-post="{% url 'chat' %}" hx-target="#chat-messages" hx-swap="beforeend" class="flex gap-2 border-t border-slate-200 p-3">
+      {% csrf_token %}
+      <input name="message" type="text" autocomplete="off" placeholder="Frage eingeben &hellip;" aria-label="Nachricht" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+      <button type="submit" class="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Senden</button>
+    </form>
+  </section>
+</details>
+{% endblock %}

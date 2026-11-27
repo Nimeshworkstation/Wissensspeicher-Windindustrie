@@ -1,0 +1,92 @@
+from pathlib import Path
+from langchain_core.documents import Document
+from typing import List
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+)
+import logging
+
+logger = logging.getLogger(__name__)   # -> logs/rag/ragapp.log (settings.LOGGING)
+
+""" 
+def load_documents_directory_loader(data_dir: Path):
+    "Using Directory loader instead of Individual loader"
+    documents = []
+    dir_loader = DirectoryLoader(
+        path=data_dir,
+        glob="*.pdf",
+        loader_cls=PyPDFLoader,
+        show_progress=True,
+    )
+    documents.extend(dir_loader.load())
+    return documents"""
+
+
+def update_metadata(loader, path):
+    for docs in loader:
+        docs.metadata.update(
+            {
+                "source": str(path),
+                "file_name": path.name,
+                "extension": path.suffix,
+            }
+        )
+
+
+def load_file(loader_type, files_path, encoding=None):
+    documents = []
+    for file_path in files_path:
+        kwargs = {"file_path": str(file_path)}
+        if encoding:
+            kwargs["encoding"] = encoding
+        doctype = loader_type(**kwargs)
+        loader = doctype.load()
+        logger.info("Loaded %d page(s) from %s", len(loader), file_path.name)
+        update_metadata(loader, file_path)
+        documents.extend(loader)
+    return documents
+
+
+def load_pdf_file(data_dir):
+    files_path = list(data_dir.glob("**/*.pdf"))
+    logger.info("%d PDF file(s) to process", len(files_path))
+    documents = load_file(PyPDFLoader, files_path)
+    logger.info("%d page(s) loaded from %d PDF file(s)", len(documents), len(files_path))
+    return documents
+
+
+def load_text_file(data_dir):
+    files_path = list(data_dir.glob("**/*.txt"))
+    logger.info("%d TXT file(s) to process", len(files_path))
+    documents = load_file(TextLoader, files_path, encoding="utf-8")
+    logger.info("%d document(s) loaded from %d TXT file(s)", len(documents), len(files_path))
+    return documents
+
+
+def load_all_documents(data_dir, file_types):
+    logger.info("Data ingestion pipeline started")
+    loaders = {"txt": load_text_file, "pdf": load_pdf_file}
+    data_path = Path(data_dir)
+    if not data_path.exists():
+        logger.warning("Nothing found inside path %s", data_dir)
+        return None
+    all_documents = []
+    for type in file_types:
+        loader_func = loaders[type]
+        document = loader_func(data_path)
+        all_documents.extend(document)
+    logger.info("Loaded %d source document page(s) from file types: %s",
+                len(all_documents), ", ".join(file_types))
+
+    return all_documents
+
+
+def main():
+    data_dir = Path("../data")
+    load_all_documents(data_dir, file_types=["txt", "pdf"])
+
+
+if __name__ == "__main__":
+    main()
+

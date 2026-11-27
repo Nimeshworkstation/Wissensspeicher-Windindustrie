@@ -1,0 +1,12 @@
+<p class="max-w-[90%] self-end rounded-xl rounded-tr-sm bg-emerald-700 px-3 py-2 text-sm text-white">{{ user_message }}</p>
+<p class="max-w-[90%] self-start rounded-xl rounded-tl-sm bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">{{ bot_reply }}</p>
+{% if bot_sources %}
+<div class="max-w-[90%] self-start text-xs text-slate-500">
+  <p class="mb-1 font-medium">Quellen</p>
+  <ul class="list-inside list-disc">
+    {% for source in bot_sources %}
+    <li>[{{ source.citation }}] {{ source.title }}{% if source.page %}, S. {{ source.page }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

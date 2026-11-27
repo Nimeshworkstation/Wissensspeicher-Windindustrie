@@ -1,0 +1,28 @@
+{% comment %}
+One manufacturer card with a Diagramm | Tabelle switch (pure CSS, no JavaScript).
+Parameters: card_id (unique), kicker, title, chart (Plotly HTML from windenergy/charts.py), items.
+{% endcomment %}
+<section class="mfr-card" aria-label="{{ title }}">
+  <input type="radio" name="mfr-{{ card_id }}" id="mfr-{{ card_id }}-chart" class="mfr-radio mfr-radio-chart" checked>
+  <input type="radio" name="mfr-{{ card_id }}" id="mfr-{{ card_id }}-table" class="mfr-radio mfr-radio-table">
+
+  <div class="mfr-head">
+    <div><span class="mfr-kicker">{{ kicker }}</span><h2 class="mfr-title">{{ title }}</h2></div>
+    <div class="mfr-toggle" role="group" aria-label="Ansicht wählen">
+      <label for="mfr-{{ card_id }}-chart" class="mfr-label-chart">Diagramm</label>
+      <label for="mfr-{{ card_id }}-table" class="mfr-label-table">Tabelle</label>
+    </div>
+  </div>
+
+  <div class="mfr-panel mfr-chart">
+    {% if chart %}{{ chart|safe }}<p class="mfr-unit">Top 15 Hersteller, weitere zusammengefasst. Vollständige Liste in der Tabelle.</p>
+    {% else %}<p class="mfr-empty">Keine Anlagen f&uuml;r diese Auswahl.</p>{% endif %}
+  </div>
+
+  <div class="mfr-panel mfr-table">
+    <div class="mfr-tablewrap"><table>
+      <thead><tr><th>Hersteller</th><th class="num">Anzahl</th><th class="num">Leistung (MW)</th></tr></thead>
+      <tbody>{% for item in items %}<tr><td>{{ item.name }}</td><td class="num">{{ item.count_display }}</td><td class="num">{{ item.capacity_display }}</td></tr>{% empty %}<tr><td colspan="3" class="mfr-empty">Keine Daten f&uuml;r diese Auswahl.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</section>
